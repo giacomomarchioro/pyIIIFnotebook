@@ -8,3 +8,7 @@ The viewer is based on [matplotlib](https://matplotlib.org/) and [ipythonwidgets
 
 ## Installation 
 
+Development:
+```
+pip install git+https://github.com/giacomomarchioro/pyIIIFnotebook
+```
