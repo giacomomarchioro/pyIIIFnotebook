@@ -412,12 +412,21 @@ class IIIFviewer():
                             if body["type"] == "Image":
                                 contentresource = body
                                 self.W_choiceelem.disabled = True
+                            
+                            if body["type"] == "SpecificResource":
+                                contentresource = body["source"]
                                 
                             if 'service' in contentresource:
                                 for service in contentresource['service']:
+                                    
                                     if service['type'].startswith('ImageService'):
+                                        region = None
                                         self.service_url = service['id']
-                                        imageurl = self.get_currentImageURL(preview=True)
+                                        if "selector" in body:
+                                            if body["selector"]["type"] in ["iiif:ImageApiSelector","ImageApiSelector"]:
+                                                region = body["selector"]["region"]
+
+                                        imageurl = self.get_currentImageURL(preview=True,region=region)
                                         if 'annotations' in service:
                                             annostr= ""
                                             for annopage in service['annotations']:
@@ -456,8 +465,10 @@ class IIIFviewer():
                 if canvas['width'] != ann['body']['width'] and not self.disable_resize:
                     img = resize(img,(canvas['height'],canvas['width']))
                     print("Resizing image body to canvas size.")
-                
-            ax.imshow(img)
+            cmap = None
+            if len(img.shape) < 3:
+                cmap='gray'
+            ax.imshow(img,cmap=cmap)
             if 'label' in canvas:
                 title = trylanguage(canvas['label'])
                 ax.set_title(title)
