@@ -563,6 +563,25 @@ class IIIFviewer():
             )
             accordionitems.append(rendering)
             accordionlabels.append("Rendering")
+
+        if 'seeAlso' in mnf:
+            seeAlsohtml = ""
+            for seeAlso in mnf['seeAlso']:
+                label = trylanguage(seeAlso['label'])
+                url = seeAlso['id']
+                seeAlsohtml += f"<a href={url} target=_blank>{label} </a>"
+                if 'type' in seeAlso:
+                    seeAlsohtml += f"{seeAlso['type']} "
+                if 'format' in seeAlso:
+                    seeAlsohtml += f"{seeAlso['format']}"
+                if 'profile' in seeAlso:
+                    seeAlsohtml += f" Profile: <a href={seeAlso['profile']} target=_blank>{seeAlso['profile']} </a>"
+                seeAlsohtml += "<br>"
+            seeAlsoWidget = widgets.HTML(
+                value=seeAlsohtml,  
+            )
+            accordionitems.append(seeAlsoWidget)
+            accordionlabels.append("seeAlso")
         ## LAYOUT TABS AND ACCORDIONS
         if firstopening:
             self._tab_nest = widgets.Tab()
