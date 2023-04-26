@@ -502,7 +502,22 @@ class IIIFviewer():
                 update_image(i)
             else:
                 print("Canvas number exceeds the number of Canvas")
-            
+
+        def getseeAlso(obj):
+            seeAlsohtml = ""
+            for seeAlso in obj['seeAlso']:
+                label = trylanguage(seeAlso['label'])
+                url = seeAlso['id']
+                seeAlsohtml += f"<a href={url} target=_blank>{label} </a>"
+                if 'type' in seeAlso:
+                    seeAlsohtml += f"{seeAlso['type']} "
+                if 'format' in seeAlso:
+                    seeAlsohtml += f"{seeAlso['format']}"
+                if 'profile' in seeAlso:
+                    seeAlsohtml += f" Profile: <a href={seeAlso['profile']} target=_blank>{seeAlso['profile']} </a>"
+                seeAlsohtml += "<br>"
+            return seeAlsohtml
+
         self.W_annotations.observe(view_image,names='value')
         self.W_choiceelem.observe(view_image,names='value')
         self.W_canvasID.observe(view_image,names='value')
@@ -522,24 +537,31 @@ class IIIFviewer():
             accordionlabels.append("Required statement")
         if 'provider' in mnf:
             providers = mnf['provider']
-            htmlprovider = ""
+            htmlprovider = "<ul>"
             for provider in providers:
+                htmlprovider ="<li>"
+                if 'logo' in provider:
+                    logos = provider['logo']
+                    for logo in logos:
+                        urllogo = logo['id']
+                        htmlprovider += f"<img src={urllogo} width=200px>"
                 htmlprovider += provider['id']
                 if 'homepage' in provider:
                     for homepage in provider['homepage']:
                         homepageid = homepage['id']
                         homepagelabel = trylanguage(homepage['label'])
                         htmlprovider += f"- <a href={homepageid} target=_blank>{homepagelabel} </a>"
-                if 'logo' in provider:
-                    logos = provider['logo']
-                    for logo in logos:
-                        urllogo = logo['id']
-                        htmlprovider += f"<img src={urllogo} width=200px><br>"
+                htmlprovider += "<br>"
+                if 'seeAlso' in provider:
+                     htmlprovider += getseeAlso(provider)
+                htmlprovider += "</li>"
+            htmlprovider += "</ul>"
             provider = widgets.HTML(
                 value=htmlprovider,
             )
             accordionitems.append(provider)
             accordionlabels.append("Providers")
+            
         if 'rights' in mnf:
             rights = widgets.HTML(    
                 value=f"<a href={mnf['rights']}>{mnf['rights']}</a>"
@@ -565,18 +587,7 @@ class IIIFviewer():
             accordionlabels.append("Rendering")
 
         if 'seeAlso' in mnf:
-            seeAlsohtml = ""
-            for seeAlso in mnf['seeAlso']:
-                label = trylanguage(seeAlso['label'])
-                url = seeAlso['id']
-                seeAlsohtml += f"<a href={url} target=_blank>{label} </a>"
-                if 'type' in seeAlso:
-                    seeAlsohtml += f"{seeAlso['type']} "
-                if 'format' in seeAlso:
-                    seeAlsohtml += f"{seeAlso['format']}"
-                if 'profile' in seeAlso:
-                    seeAlsohtml += f" Profile: <a href={seeAlso['profile']} target=_blank>{seeAlso['profile']} </a>"
-                seeAlsohtml += "<br>"
+            seeAlsohtml = getseeAlso(mnf)
             seeAlsoWidget = widgets.HTML(
                 value=seeAlsohtml,  
             )
