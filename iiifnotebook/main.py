@@ -155,21 +155,41 @@ class IIIFviewer():
             warning("The visualizer is designed to work with Jupyter notebook.")
         firstopening = True
         
+        def trylanguage(iiifobject):
+            if self.preferred_language in iiifobject:
+                values = iiifobject[self.preferred_language]
+            elif "none" in iiifobject:
+                values = iiifobject["none"]
+            else:
+                values = list(iiifobject.values())[0]
+                print(f"language {self.preferred_language} not available.")
+            return " ".join(values)
+
         def saveROIbutton(arg):
             self.RoIs[self.W_canvasID.value].append((
                                         self.lastRoI,
                                         self.W_RoI_comment.value))
             self.ROIsURLs[self.W_canvasID.value].append(self.lastRoIURL)
 
-        if self.manifest is None or forcereload:
-            response = requests.get(self.url)
+        def requestresource(url):
+            response = requests.get(url)
             if response.ok:
                 self.manifest = response.json()
                 # TODO: why I can't read the self.manifest
                 mnf = response.json()
+                if mnf["type"] == "Collection":
+                    print(f"Select a Manifest:")
+                    for ind,item in enumerate(mnf["items"]):
+                        label = trylanguage(item['label'])
+                        print(f"{ind+1} - {item['type']}: {label} {item['id']} ")
+                    manifestindex = int(input("Select manifest index: ")) - 1
+                    return requestresource(mnf["items"][manifestindex]['id'])
+                return mnf
             else:
                 raise ValueError("Could not get the Manifest.")
 
+        if self.manifest is None or forcereload:
+            mnf = requestresource(self.url)
             # {region}/{size}/{rotation}/{quality}.{format}
             self.W_canvasID = widgets.BoundedIntText(
                 description="Canvas:",
@@ -265,16 +285,6 @@ class IIIFviewer():
                     else:
                         print(f'{name} activated.')
                         selector.set_active(True)
-
-        def trylanguage(iiifobject):
-            if self.preferred_language in iiifobject:
-                values = iiifobject[self.preferred_language]
-            elif "none" in iiifobject:
-                values = iiifobject["none"]
-            else:
-                values = list(iiifobject.values())[0]
-                print(f"language {self.preferred_language} not available.")
-            return " ".join(values)
         
         def gettarget(iiifObjectWithTarget):
             if isinstance(iiifObjectWithTarget['target'],str):
