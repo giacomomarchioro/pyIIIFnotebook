@@ -42,6 +42,7 @@ class IIIFviewer():
         self._canvas_info_labels = []
         self.canvas_info = widgets.Accordion()
         self._cavnas_info_html = widgets.HTML("None")
+        self._canvasmetadatatable = widgets.HTML("None")
         self._annotations_html = widgets.HTML("None")
         self.contentresource_info = widgets.Accordion()
         self._ccontentresource_info_html = widgets.HTML("None")
@@ -488,6 +489,9 @@ class IIIFviewer():
             #bdy = canvas['body']
             generalinfo = "<br>".join([f"{i}: {canvas[i]}" for i in canvas if isinstance(canvas[i],(str,float,int))])
             self._cavnas_info_html.value = generalinfo
+            if 'metadata' in canvas:
+                self._canvasmetadatatable = createtable(canvas['metadata'])
+
             ### Annotations
             if 'annotations' in canvas:
                 annostr= ""
@@ -497,8 +501,7 @@ class IIIFviewer():
                         annostr = f"{self._lannotations_count} - {item['body']['value']} - {item['target']} <br>"
                         get_annotations(item)  
                 self._annotations_html.value = annostr
-                
-                    
+
             if self._lannotations_count > 0:
                 self.W_annotations.disabled = False
             else:
@@ -616,9 +619,10 @@ class IIIFviewer():
             for ind,albl in enumerate(accordionlabels):
                 manifest_info.set_title(ind,albl)
             # Accordion canvas info
-            self.canvas_info = widgets.Accordion(children=[self._cavnas_info_html,self._annotations_html])
+            self.canvas_info = widgets.Accordion(children=[self._cavnas_info_html,self._annotations_html,self._canvasmetadatatable])
             self.canvas_info.set_title(0,"General infos")
             self.canvas_info.set_title(1,"Annotations")
+            self.canvas_info.set_title(2,"Metadata")
             HBOX = widgets.HBox([self.W_canvasID,self.W_choiceelem,self.W_annotations])
             HBOX2 = widgets.HBox([self.W_region,self.W_preview_size,self.W_final_size])
             HBOX3 = widgets.HBox([self.W_rot_fld,self.W_quality,self.W_img_format])
