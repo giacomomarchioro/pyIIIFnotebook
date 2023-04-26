@@ -14,6 +14,9 @@ import requests
 from io import StringIO
 from html.parser import HTMLParser
 import psutil
+
+from collections import defaultdict
+
 global RUNNING_IN_JUPYTER
 RUNNING_IN_JUPYTER = any([i.endswith("bin/jupyter-notebook") for i in psutil.Process().parent().cmdline()])
 
@@ -40,12 +43,19 @@ class IIIFviewer():
         self.canvas_info = widgets.Accordion()
         self._cavnas_info_html = widgets.HTML("None")
         self._annotations_html = widgets.HTML("None")
+        self.contentresource_info = widgets.Accordion()
+        self._ccontentresource_info_html = widgets.HTML("None")
+        self._contentresource_annotations_html = widgets.HTML("")
         self._lcnv_width = None
         self._lcnv_height = None
         self._limg_width = None
         self._limg_height = None
-        self.RoIs = {}
-        self.ROIsURLs = {}
+        self._lannotations_count = 0
+        self._tab_nest = None
+        self.lastRoI = None
+        self.lastRoIURL = None
+        self.RoIs = defaultdict(list)
+        self.ROIsURLs = defaultdict(list)
         # Must be the last
         self.opendata()
     
@@ -79,7 +89,7 @@ class IIIFviewer():
                          str(self.W_rot_fld.value),
                          ".".join([self.W_quality.value,self.W_img_format.value])])
     
-    def get_RoIURL(self,canvasindx=None):
+    def get_RoIURL(self,canvasindx=None,ROIindex=0):
         """_summary_
 
         Args:
@@ -93,7 +103,7 @@ class IIIFviewer():
             canvasindx = self.W_canvasID.value
         if canvasindx in self.RoIs:
             RoI = self.RoIs[canvasindx]
-            region = ",".join(map(str,self.RoIs[canvasindx]))
+            region = ",".join(map(str,self.RoIs[canvasindx][ROIindex][0]))
         return self.get_currentImageURL(region=f"pct:{region}")
              
     def get_datafromURLs(self,urls):
@@ -104,6 +114,7 @@ class IIIFviewer():
         return data
     
     def get_stackfromChoices(self,canvasindx=None,preview=False):
+        #TODO: make it work for the newer version
         if canvasindx is None:
             canvasindx = self.W_canvasID.value
         canvas = self.manifest['items'][canvasindx]
@@ -139,70 +150,91 @@ class IIIFviewer():
         return self.get_datafromURLs(urls)
                         
     
-    def opendata(self):
+    def opendata(self,forcereload=False):
         if not RUNNING_IN_JUPYTER:
             warning("The visualizer is designed to work with Jupyter notebook.")
-        response = requests.get(self.url)
-        if response.ok:
-            self.manifest = response.json()
-            # TODO: why I can't read the self.manifest
-            mnf = response.json()
-        else:
-            raise ValueError("Could not get the Manifest.")
+        firstopening = True
+        
+        def saveROIbutton(arg):
+            self.RoIs[self.W_canvasID.value].append((
+                                        self.lastRoI,
+                                        self.W_RoI_comment.value))
+            self.ROIsURLs[self.W_canvasID.value].append(self.lastRoIURL)
 
-        # {region}/{size}/{rotation}/{quality}.{format}
-        self.W_canvasID = widgets.IntText(
-            description="Canvas:",
-            min=0,
-            max=len(mnf['items']))
-        #language = widgets.Text(
-        #    value=self.preferred_language,
-        #    placeholder=self.preferred_language,
-        #    description='Language:',
-        #    disabled=False
-        #)
-        self.W_annotations = widgets.Checkbox(
-            value=True,
-            description='Show annotations',
-            disabled=False
-        )
-        self.W_quality = widgets.Text(
-            value='default',
-            placeholder='default',
-            description='Quality:',
-            disabled=False
-        )
-        self.W_region = widgets.Text(
-            value='full',
-            placeholder='full',
-            description='Region:',
-            disabled=False
-        )
-        self.W_img_format = widgets.Text(
-            value='jpg',
-            placeholder='jpg',
-            description='Format:',
-            disabled=False
-        )
-        self.W_rot_fld = widgets.IntText(description="Rotation:",value=0)
-        self.W_preview_size = widgets.Text(
-            value='400,',
-            placeholder='400,',
-            description='Preview:',
-            disabled=False
-        )
-        self.W_final_size = widgets.Text(
-            value='max',
-            placeholder='max',
-            description='Final Size:',
-            disabled=False
-        )
-        self.W_choiceelem = widgets.Dropdown(
-            options=['none'],
-            value='none',
-            description='Choices:',
-            disabled=False,
-        )
+        if self.manifest is None or forcereload:
+            response = requests.get(self.url)
+            if response.ok:
+                self.manifest = response.json()
+                # TODO: why I can't read the self.manifest
+                mnf = response.json()
+            else:
+                raise ValueError("Could not get the Manifest.")
+
+            # {region}/{size}/{rotation}/{quality}.{format}
+            self.W_canvasID = widgets.BoundedIntText(
+                description="Canvas:",
+                min=0,
+                max=len(mnf['items'])-1
+                )
+            #language = widgets.Text(
+            #    value=self.preferred_language,
+            #    placeholder=self.preferred_language,
+            #    description='Language:',
+            #    disabled=False
+            #)
+            self.W_annotations = widgets.Checkbox(
+                value=True,
+                description='Show annotations',
+                disabled=False
+            )
+            self.W_quality = widgets.Text(
+                value='default',
+                placeholder='default',
+                description='Quality:',
+                disabled=False
+            )
+            self.W_region = widgets.Text(
+                value='full',
+                placeholder='full',
+                description='Region:',
+                disabled=False
+            )
+            self.W_img_format = widgets.Text(
+                value='jpg',
+                placeholder='jpg',
+                description='Format:',
+                disabled=False
+            )
+            self.W_rot_fld = widgets.IntText(description="Rotation:",value=0)
+            self.W_preview_size = widgets.Text(
+                value='400,',
+                placeholder='400,',
+                description='Preview:',
+                disabled=False
+            )
+            self.W_final_size = widgets.Text(
+                value='max',
+                placeholder='max',
+                description='Final Size:',
+                disabled=False
+            )
+            self.W_choiceelem = widgets.Dropdown(
+                options=['none'],
+                value='none',
+                description='Choices:',
+                disabled=False,
+            )
+
+            self.W_RoI_comment = widgets.Textarea(
+                description='Comment:',
+                disabled=False
+            )
+            self.W_saveROIbtn = widgets.Button(description = 'Save ROI')   
+            self.W_saveROIbtn.on_click(saveROIbutton)
+
+        else:
+            mnf = self.manifest
+            firstopening = False
 
         def select_callback(eclick, erelease):
             """
@@ -215,12 +247,12 @@ class IIIFviewer():
 
             width = x2 - x1
             height = y2 - y1
-            self.RoIs[self.W_canvasID.value] = [round(x1/self._limgwidth*100,2),
-                                         round(y1/self._limgheight*100,2),
-                                         round(width/self._limgwidth*100,2),
-                                         round(height/self._limgheight*100,2)]
-            region = ",".join(map(str,self.RoIs[self.W_canvasID.value]))
-            self.ROIsURLs[self.W_canvasID.value] = self.get_currentImageURL(region=f"pct:{region}")
+            self.lastRoI = [round(x1/self._limgwidth*100,2),
+                            round(y1/self._limgheight*100,2),
+                            round(width/self._limgwidth*100,2),
+                            round(height/self._limgheight*100,2)]
+            region = ",".join(map(str,self.lastRoI))
+            self.lastRoIURL = self.get_currentImageURL(region=f"pct:{region}")
         
         def toggle_selector(event):
             print('Key pressed.')
@@ -243,6 +275,17 @@ class IIIFviewer():
                 values = list(iiifobject.values())[0]
                 print(f"language {self.preferred_language} not available.")
             return " ".join(values)
+        
+        def gettarget(iiifObjectWithTarget):
+            if isinstance(iiifObjectWithTarget['target'],str):
+                return iiifObjectWithTarget['target'].split("#xywh=")
+            elif isinstance(iiifObjectWithTarget['target'],dict):
+                if 'source' in iiifObjectWithTarget['target'] and 'selector' not in iiifObjectWithTarget['target']:
+                    return iiifObjectWithTarget['target']['source'].split("#xywh=")
+                if 'source' in iiifObjectWithTarget['target'] and 'selector' in iiifObjectWithTarget['target']:
+                    if 'region' in iiifObjectWithTarget['target']['selector']:
+                        return ('region',iiifObjectWithTarget['target']['selector']['region'])
+
         
         def createtable(keyvalueobj):
             """
@@ -281,18 +324,11 @@ class IIIFviewer():
             return s.get_data()
         
         manifestlabel = trylanguage(mnf['label'])
+
+
+        # Matplotlib interface
         fig = plt.figure(manifestlabel)
         ax = fig.subplots(1)
-        
-
-        ## Attribution
-        requiredstatementtable = None
-        if 'requiredStatement' in mnf:
-            # watermark on the image
-            label = strip_tags(trylanguage(mnf['requiredStatement']['label']))
-            value = strip_tags(trylanguage(mnf['requiredStatement']['value']))
-            textstr = f"{label}:{value}"
-            ax.set_ylabel(textstr,fontsize=6)
         ## Rectangle selecotors
         selectors = []
         selectors.append(RectangleSelector(
@@ -304,8 +340,55 @@ class IIIFviewer():
             interactive=True))
         fig.canvas.mpl_connect('key_press_event', toggle_selector)
         plt.show()
-        
 
+        ## Attribution
+        requiredstatementtable = None
+        if 'requiredStatement' in mnf:
+            # watermark on the image
+            label = strip_tags(trylanguage(mnf['requiredStatement']['label']))
+            value = strip_tags(trylanguage(mnf['requiredStatement']['value']))
+            textstr = f"{label}:{value}"
+            ax.set_ylabel(textstr,fontsize=6)
+       
+        def get_annotations(annopage_item):
+                # we check that we want to display the annotations
+                if self.W_annotations.value:
+                    fragments = gettarget(annopage_item)
+                    if len(fragments) > 1:
+                        fragment = fragments[-1]
+                        imgwidth =  self._limgwidth
+                        imgheight =  self._limgheight
+                        if fragment.startswith("pct:"):
+                            print("Not implemented")
+                            fragment = fragment.strip("pct:")
+                            xi,yi,wi,hi = map(float,fragment.split(","))
+                            x = xi/100*imgwidth
+                            y = yi/100*imgheight
+                            width = wi/100*imgwidth
+                            height = hi/100*imgheight
+                        else:
+                            xi,yi,wi,hi = map(float,fragment.split(","))
+                            
+                            x = xi/self._lcnv_width*imgwidth
+                            y = yi/self._lcnv_height*imgheight
+                            width = wi/self._lcnv_width*imgwidth
+                            height = hi/self._lcnv_height*imgheight
+                    else:
+                        # whole canvase case
+                        x = 0
+                        y = 0
+                        width = self._limgwidth
+                        height = self._limgheight
+                    rect = patches.Rectangle((x,y),
+                                        width,
+                                        height,
+                                        linewidth=4,
+                                        edgecolor='r',facecolor='none')
+                    # Add the patch to the Axes
+                    ax.add_patch(rect)
+                # if we don't want to display them we romove any
+                else:
+                    [p.remove() for p in reversed(ax.patches)]
         
         def update_image(canvasindex):
             canvas = mnf['items'][canvasindex]
@@ -322,32 +405,53 @@ class IIIFviewer():
                                     ic = body["items"]
                                     opts = [(trylanguage(j["label"]),i) for i,j in enumerate(ic)]
                                     self.W_choiceelem.options = opts
-                                    imageobj = body["items"][0]
+                                    contentresource = body["items"][0]
                                 else:
-                                    imageobj = body["items"][self.W_choiceelem.value]
+                                    contentresource = body["items"][self.W_choiceelem.value]
                                 
                             if body["type"] == "Image":
-                                imageobj = body
+                                contentresource = body
                                 self.W_choiceelem.disabled = True
                                 
-                            if 'service' in imageobj:
-                                for service in imageobj['service']:
+                            if 'service' in contentresource:
+                                for service in contentresource['service']:
                                     if service['type'].startswith('ImageService'):
                                         self.service_url = service['id']
                                         imageurl = self.get_currentImageURL(preview=True)
+                                        if 'annotations' in service:
+                                            annostr= ""
+                                            for annopage in service['annotations']:
+                                                for item in annopage['items']:
+                                                    self._lannotations_count +=1
+                                                    annostr = f"{self._lannotations_count} - {item['body']['value']} - {gettarget(item)} <br>"
+                                                    get_annotations(item)  
+                                            self._contentresource_annotations_html.value += annostr
                             else:
-                                imageurl = imageobj['id']
+                                imageurl = contentresource['id']
                                 self.W_final_size.disabled = True
                                 self.W_preview_size.disabled = True
                                 self.W_rot_fld.disabled = True
                                 self.W_quality.disabled = True
                                 self.W_region.disabled = True
                                 self.W_img_format.disabled = True
-                        
-            img = io.imread(imageurl)
-            # used by the selector
-            self._limgwidth = img.shape[1]
-            self._limgheight = img.shape[0]
+
+                            ## Read the image
+                            img = io.imread(imageurl)
+                            # used by the selector
+                            self._limgwidth = img.shape[1]
+                            self._limgheight = img.shape[0]
+                            if 'annotations' in contentresource:
+                                annostr= ""
+                                for annopage in contentresource['annotations']:
+                                    for item in annopage['items']:
+                                        self._lannotations_count +=1
+                                        annostr = f"{self._lannotations_count} - {item['body']['value']} - {gettarget(item)} <br>"
+                                        get_annotations(item)  
+                                self._contentresource_annotations_html.value += annostr
+                                
+                            generalinfo = "<br>".join([f"{i}: {contentresource[i]}" for i in contentresource if isinstance(contentresource[i],(str,float,int))])
+                            self._ccontentresource_info_html.value = generalinfo
+               
             if 'width' in ann['body'] and 'height' in ann['body']:
                 if canvas['width'] != ann['body']['width'] and not self.disable_resize:
                     img = resize(img,(canvas['height'],canvas['width']))
@@ -366,56 +470,18 @@ class IIIFviewer():
             ### Annotations
             if 'annotations' in canvas:
                 annostr= ""
-                counter = 0
                 for annopage in canvas['annotations']:
                     for item in annopage['items']:
-                        counter +=1
-                        annostr = f"{counter} - {item['body']['value']} - {item['target']} <br>"
-                        if self.W_annotations.value:
-                            fragments = item['target'].split("#xywh=")
-                            if len(fragments) > 1:
-                                fragment = fragments[-1]
-                                imgwidth = img.shape[1]
-                                imgheight = img.shape[0]
-                                if fragment.startswith("pct:"):
-                                    print("Not implemented")
-                                    fragment = fragment.strip("pct:")
-                                    xi,yi,wi,hi = map(float,fragment.split(","))
-                                    x = xi/100*imgwidth
-                                    y = yi/100*imgheight
-                                    width = wi/100*imgwidth
-                                    height = hi/100*imgheight
-                                else:
-                                    xi,yi,wi,hi = map(float,fragment.split(","))
-                                    
-                                    x = xi/self._lcnv_width*imgwidth
-                                    y = yi/self._lcnv_height*imgheight
-                                    width = wi/self._lcnv_width*imgwidth
-                                    height = hi/self._lcnv_height*imgheight
-                            else:
-                                # whole canvase case
-                                x = 0
-                                y = 0
-                                width = img.shape[1]
-                                height = img.shape[0]
-                            rect = patches.Rectangle((x,y),
-                                             width,
-                                             height,
-                                             linewidth=4,
-                                             edgecolor='r',facecolor='none')
-                            # Add the patch to the Axes
-                            ax.add_patch(rect)
-                        else:
-                            [p.remove() for p in reversed(ax.patches)]
-                            
-                if counter > 0:
-                    self.W_annotations.disabled = False
+                        self._lannotations_count +=1
+                        annostr = f"{self._lannotations_count} - {item['body']['value']} - {item['target']} <br>"
+                        get_annotations(item)  
                 self._annotations_html.value = annostr
                 
                     
+            if self._lannotations_count > 0:
+                self.W_annotations.disabled = False
             else:
                 self.W_annotations.disabled = True
-            
             # Sow image
             plt.show()
 
@@ -487,27 +553,33 @@ class IIIFviewer():
             accordionitems.append(rendering)
             accordionlabels.append("Rendering")
         ## LAYOUT TABS AND ACCORDIONS
-        
-        tab_nest = widgets.Tab()
-        #accordion = widgets.Accordion(children=[widgets.IntSlider(), widgets.Text()], titles=('Slider', 'Text'))
-        tab_nest.set_title(0, "Controls")
-        tab_nest.set_title(1, "Manifest Infos")
-        tab_nest.set_title(2, "Canvas Infos")
-        # Accordion manifest items
-        manifest_info = widgets.Accordion(children=accordionitems)
-        for ind,albl in enumerate(accordionlabels):
-            manifest_info.set_title(ind,albl)
-         # Accordion canvas info
-        self.canvas_info = widgets.Accordion(children=[self._cavnas_info_html,self._annotations_html])
-        self.canvas_info.set_title(0,"General infos")
-        self.canvas_info.set_title(1,"Annotations")
-        HBOX = widgets.HBox([self.W_canvasID,self.W_choiceelem,self.W_annotations])
-        HBOX2 = widgets.HBox([self.W_region,self.W_preview_size,self.W_final_size])
-        HBOX3 = widgets.HBox([self.W_rot_fld,self.W_quality,self.W_img_format])
+        if firstopening:
+            self._tab_nest = widgets.Tab()
+            #accordion = widgets.Accordion(children=[widgets.IntSlider(), widgets.Text()], titles=('Slider', 'Text'))
+            self._tab_nest.set_title(0, "Controls")
+            self._tab_nest.set_title(1, "Manifest infos")
+            self._tab_nest.set_title(2, "Canvas infos")
+            self._tab_nest.set_title(3, "Contentresource infos")
+            # Accordion manifest items
+            manifest_info = widgets.Accordion(children=accordionitems)
+            for ind,albl in enumerate(accordionlabels):
+                manifest_info.set_title(ind,albl)
+            # Accordion canvas info
+            self.canvas_info = widgets.Accordion(children=[self._cavnas_info_html,self._annotations_html])
+            self.canvas_info.set_title(0,"General infos")
+            self.canvas_info.set_title(1,"Annotations")
+            HBOX = widgets.HBox([self.W_canvasID,self.W_choiceelem,self.W_annotations])
+            HBOX2 = widgets.HBox([self.W_region,self.W_preview_size,self.W_final_size])
+            HBOX3 = widgets.HBox([self.W_rot_fld,self.W_quality,self.W_img_format])
+            HBOX4 = widgets.HBox([self.W_RoI_comment,self.W_saveROIbtn])
+            contentresource = widgets.Accordion(children=[self._ccontentresource_info_html,
+                                                        self._contentresource_annotations_html])
+            contentresource.set_title(0,"General infos")
+            contentresource.set_title(1,"Annotations")
 
-        Cntr_layout = widgets.VBox([HBOX,HBOX2,HBOX3])
-        #HBOX = widgets.GridBox([self.W_canvasID,rot_fld,preview_size,final_size,valid], layout=widgets.Layout(grid_template_columns="repeat(3, 200px)"))
-        tab_nest.children = [Cntr_layout,manifest_info,self.canvas_info]
-        display(tab_nest)
+            Cntr_layout = widgets.VBox([HBOX,HBOX2,HBOX4])
+            #HBOX = widgets.GridBox([self.W_canvasID,rot_fld,preview_size,final_size,valid], layout=widgets.Layout(grid_template_columns="repeat(3, 200px)"))
+            self._tab_nest.children = [Cntr_layout,manifest_info,self.canvas_info,contentresource]
+            display(self._tab_nest)
         update_image(0)
-        return tab_nest
+        return self._tab_nest
