@@ -407,7 +407,21 @@ class IIIFviewer():
                 # if we don't want to display them we romove any
                 else:
                     [p.remove() for p in reversed(ax.patches)]
-        
+        def check_body(body):
+            if body['type'] == "SpecificResource":
+                return f"<a href={body['source']} target=_blank>{body['source']} </a> <br>"
+            if body['type'] == "TextualBody":
+                return body['value'] + "<br>"
+
+        def get_annobodies(annoitem):
+            if isinstance(annoitem['body'],list):
+                annostr = ""
+                for body in annoitem['body']:
+                    annostr += check_body(body)
+            else:
+                annostr = f"{self._lannotations_count} - {check_body(annoitem['body'])} - {gettarget(annoitem)} <br>"
+            return annostr
+
         def update_image(canvasindex):
             canvas = mnf['items'][canvasindex]
             self._lcnv_width = int(canvas['width'])
@@ -450,8 +464,8 @@ class IIIFviewer():
                                             for annopage in service['annotations']:
                                                 for item in annopage['items']:
                                                     self._lannotations_count +=1
-                                                    annostr = f"{self._lannotations_count} - {item['body']['value']} - {gettarget(item)} <br>"
-                                                    get_annotations(item)  
+                                                    annostr += get_annobodies(annoitem=item)
+                                                    get_annotations(item)
                                             self._contentresource_annotations_html.value += annostr
                             else:
                                 imageurl = contentresource['id']
@@ -471,8 +485,7 @@ class IIIFviewer():
                                 annostr= ""
                                 for annopage in contentresource['annotations']:
                                     for item in annopage['items']:
-                                        self._lannotations_count +=1
-                                        annostr = f"{self._lannotations_count} - {item['body']['value']} - {gettarget(item)} <br>"
+                                        annostr += get_annobodies(annoitem=item)
                                         get_annotations(item)  
                                 self._contentresource_annotations_html.value += annostr
                                 
@@ -505,7 +518,7 @@ class IIIFviewer():
                 for annopage in canvas['annotations']:
                     for item in annopage['items']:
                         self._lannotations_count +=1
-                        annostr = f"{self._lannotations_count} - {item['body']['value']} - {item['target']} <br>"
+                        annostr += get_annobodies(annoitem=item)
                         get_annotations(item)  
                 self._annotations_html.value = annostr
 
