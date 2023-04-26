@@ -297,10 +297,9 @@ class IIIFviewer():
                     if 'region' in iiifObjectWithTarget['target']['selector']:
                         return ('region',iiifObjectWithTarget['target']['selector']['region'])
 
-        
-        def createtable(keyvalueobj):
+        def createHTMLtable(keyvalueobj):
             """
-            Create an HTML table widget from a key value dict.
+            Create an HTML table from a key value dict.
             """
             table = ['<table>']
             for row in keyvalueobj:
@@ -309,8 +308,16 @@ class IIIFviewer():
                 trow = f'<tr><td>{label}: </td><td>{value}</td></tr>'
                 table.append(trow)
             table.append('</table>')
+            value="".join(table)
+            return value
+        
+        def createtable(keyvalueobj):
+            """
+            Create an HTML table widget from a key value dict.
+            """
+            createHTMLtable
             htmltable = widgets.HTML(
-            value="".join(table),
+            value=createHTMLtable(keyvalueobj),
             )
             return htmltable
         
@@ -490,7 +497,7 @@ class IIIFviewer():
             generalinfo = "<br>".join([f"{i}: {canvas[i]}" for i in canvas if isinstance(canvas[i],(str,float,int))])
             self._cavnas_info_html.value = generalinfo
             if 'metadata' in canvas:
-                self._canvasmetadatatable = createtable(canvas['metadata'])
+                self._canvasmetadatatable.value = createHTMLtable(canvas['metadata'])
 
             ### Annotations
             if 'annotations' in canvas:
