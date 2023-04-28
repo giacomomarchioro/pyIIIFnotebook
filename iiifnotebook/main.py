@@ -252,6 +252,7 @@ class IIIFviewer():
             )
             self.W_saveROIbtn = widgets.Button(description = 'Save ROI')   
             self.W_saveROIbtn.on_click(saveROIbutton)
+            self.W_refreshbtn = widgets.Button(description = 'Refresh')   
 
         else:
             mnf = self.manifest
@@ -423,6 +424,7 @@ class IIIFviewer():
             return annostr
 
         def update_image(canvasindex):
+            ax.cla()  
             canvas = mnf['items'][canvasindex]
             self._lcnv_width = int(canvas['width'])
             self._lcnv_height = int(canvas['height'])
@@ -628,6 +630,7 @@ class IIIFviewer():
             accordionlabels.append("seeAlso")
         ## LAYOUT TABS AND ACCORDIONS
         if firstopening:
+            self.W_refreshbtn.on_click(view_image)
             self._tab_nest = widgets.Tab()
             #accordion = widgets.Accordion(children=[widgets.IntSlider(), widgets.Text()], titles=('Slider', 'Text'))
             self._tab_nest.set_title(0, "Controls")
@@ -646,7 +649,7 @@ class IIIFviewer():
             HBOX = widgets.HBox([self.W_canvasID,self.W_choiceelem,self.W_annotations])
             HBOX2 = widgets.HBox([self.W_region,self.W_preview_size,self.W_final_size])
             HBOX3 = widgets.HBox([self.W_rot_fld,self.W_quality,self.W_img_format])
-            HBOX4 = widgets.HBox([self.W_RoI_comment,self.W_saveROIbtn])
+            HBOX4 = widgets.HBox([self.W_RoI_comment,self.W_saveROIbtn,self.W_refreshbtn])
             contentresource = widgets.Accordion(children=[self._ccontentresource_info_html,
                                                         self._contentresource_annotations_html])
             contentresource.set_title(0,"General infos")
