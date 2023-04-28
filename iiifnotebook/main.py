@@ -84,6 +84,21 @@ class IIIFviewer():
         else:
             size = self.W_final_size.value
         
+        # TODO: save region parameters
+        if region.startswith("pct:"):
+            print("Not implemented")
+            region = region.strip("pct:")
+            xi,yi,wi,hi = map(float,region.split(","))
+            x = xi/100*self._lcnv_width
+            y = yi/100*self._limgheight
+            width = wi/100*self._limgwidth
+            height = hi/100*self._limgheight
+        elif "," in region:
+            xi,yi,wi,hi = map(float,region.split(","))
+            x = xi/self._lcnv_width*self._limgwidth
+            y = yi/self._lcnv_height*self._limgheight
+            width = wi/self._lcnv_width*self._limgwidth
+            height = hi/self._lcnv_height*self._limgheight
         return "/".join([self.service_url,
                          region,
                          size,
@@ -289,14 +304,23 @@ class IIIFviewer():
                         selector.set_active(True)
         
         def gettarget(iiifObjectWithTarget):
-            if isinstance(iiifObjectWithTarget['target'],str):
-                return iiifObjectWithTarget['target'].split("#xywh=")
-            elif isinstance(iiifObjectWithTarget['target'],dict):
-                if 'source' in iiifObjectWithTarget['target'] and 'selector' not in iiifObjectWithTarget['target']:
-                    return iiifObjectWithTarget['target']['source'].split("#xywh=")
-                if 'source' in iiifObjectWithTarget['target'] and 'selector' in iiifObjectWithTarget['target']:
-                    if 'region' in iiifObjectWithTarget['target']['selector']:
-                        return ('region',iiifObjectWithTarget['target']['selector']['region'])
+            target = iiifObjectWithTarget['target']
+            if isinstance(target,str):
+                return ('region',target.split("#xywh="))
+            elif isinstance(target,dict):
+                if 'source' in target and 'selector' not in target:
+                    return ('region',target['source'].split("#xywh="))
+                if 'source' in target and 'selector' in target:
+                    if target['selector']['type'] == "PointSelector":
+                        x = target['selector'].get('x')
+                        y = target['selector'].get('y')
+                        t = target['selector'].get('t')
+                        return ('PointSelector',(x,y,t))
+                    if target['selector']['type'] == "ImageApiSelector":
+                        if 'region' in target['selector']:
+                            return ('region',target['selector']['region'])
+                    else:
+                        raise ValueError(f"{target['selector']['type']} not supported")
 
         def createHTMLtable(keyvalueobj):
             """
@@ -341,10 +365,8 @@ class IIIFviewer():
             s = MLStripper()
             s.feed(html)
             return s.get_data()
-        
+
         manifestlabel = trylanguage(mnf['label'])
-
-
         # Matplotlib interface
         fig = plt.figure(manifestlabel)
         ax = fig.subplots(1)
@@ -372,39 +394,43 @@ class IIIFviewer():
         def get_annotations(annopage_item):
                 # we check that we want to display the annotations
                 if self.W_annotations.value:
-                    fragments = gettarget(annopage_item)
-                    if len(fragments) > 1:
-                        fragment = fragments[-1]
-                        imgwidth =  self._limgwidth
-                        imgheight =  self._limgheight
-                        if fragment.startswith("pct:"):
-                            print("Not implemented")
-                            fragment = fragment.strip("pct:")
-                            xi,yi,wi,hi = map(float,fragment.split(","))
-                            x = xi/100*imgwidth
-                            y = yi/100*imgheight
-                            width = wi/100*imgwidth
-                            height = hi/100*imgheight
+                    selectortype,fragments = gettarget(annopage_item)
+                    if selectortype == "region":
+                        if len(fragments) > 1:
+                            fragment = fragments[-1]
+                            if fragment.startswith("pct:"):
+                                print("Not implemented")
+                                fragment = fragment.strip("pct:")
+                                xi,yi,wi,hi = map(float,fragment.split(","))
+                                x = xi/100*self._limgwidth
+                                y = yi/100*self._limgheight
+                                width = wi/100*self._limgwidth
+                                height = hi/100*self._limgheight
+                            else:
+                                xi,yi,wi,hi = map(float,fragment.split(","))
+                                x = xi/self._lcnv_width*self._limgwidth
+                                y = yi/self._lcnv_height*self._limgheight
+                                width = wi/self._lcnv_width*self._limgwidth
+                                height = hi/self._lcnv_height*self._limgheight
                         else:
-                            xi,yi,wi,hi = map(float,fragment.split(","))
-                            
-                            x = xi/self._lcnv_width*imgwidth
-                            y = yi/self._lcnv_height*imgheight
-                            width = wi/self._lcnv_width*imgwidth
-                            height = hi/self._lcnv_height*imgheight
-                    else:
-                        # whole canvase case
-                        x = 0
-                        y = 0
-                        width = self._limgwidth
-                        height = self._limgheight
-                    rect = patches.Rectangle((x,y),
-                                        width,
-                                        height,
-                                        linewidth=4,
-                                        edgecolor='r',facecolor='none')
-                    # Add the patch to the Axes
-                    ax.add_patch(rect)
+                            # whole canvase case
+                            x = 0
+                            y = 0
+                        rect = patches.Rectangle((x,y),
+                                            self._limgwidth,
+                                            self._limgheight,
+                                            linewidth=4,
+                                            edgecolor='r',facecolor='none')
+                        # Add the patch to the Axes
+                        ax.add_patch(rect)
+                    if selectortype == "PointSelector":
+                        x,y,_=fragments
+                        print(x,y)
+                        scaledx = (x/self._lcnv_width)*self._limgwidth
+                        scaledy = (y/self._lcnv_height)*self._limgheight
+                        print(scaledx,scaledy)
+                        ax.scatter(scaledx,
+                                   scaledy)
                 # if we don't want to display them we romove any
                 else:
                     [p.remove() for p in reversed(ax.patches)]
