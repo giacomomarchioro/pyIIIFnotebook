@@ -11,6 +11,7 @@ from skimage import io
 from matplotlib.widgets import RectangleSelector
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+import matplotlib
 
 import numpy as np
 import requests
@@ -96,8 +97,8 @@ class IIIFviewer:
         # TODO: save region parameters
         if region.startswith("pct:"):
             print("Not implemented")
-            region = region.strip("pct:")
-            xi, yi, wi, hi = map(float, region.split(","))
+            regionSplitted = region.strip("pct:")
+            xi, yi, wi, hi = map(float, regionSplitted.split(","))
             self.region_x = xi / 100 * self._lcnv_width
             self.region_y = yi / 100 * self._lcnv_height
             self.region_width = wi / 100 * self._lcnv_width
@@ -389,7 +390,7 @@ class IIIFviewer:
         # Matplotlib interface
         self.fig = plt.figure(manifestLabel)
         self.ax = self.fig.subplots(1)
-        ## Rectangle selecotors
+        ## Rectangle selectors
         selectors = []
         selectors.append(
             RectangleSelector(
@@ -408,9 +409,7 @@ class IIIFviewer:
         def on_xlims_change(event_ax):
             print("updated xlims: ", event_ax.get_xlim())
 
-        def on_ylims_change(event_ax):
-            print("updated ylims: ", event_ax.get_ylim())
-            if self._imagePlotted:
+        def updateZoomRegionExtent(event_ax):
                 x1,x2 = event_ax.get_xlim()
                 y1,y2 = event_ax.get_ylim()
                 x = int(x1 + 0.5)
@@ -427,6 +426,11 @@ class IIIFviewer:
                     #self.log = url
                     #extent = (x1, x2, y1, y2)
                     #self.ax.imshow(img, extent=extent)
+
+        def on_ylims_change(event_ax):
+            print("updated ylims: ", event_ax.get_ylim())
+            if self._imagePlotted:
+                updateZoomRegionExtent(event_ax)
 
 
         self.ax.callbacks.connect('xlim_changed',on_xlims_change)
@@ -448,7 +452,10 @@ class IIIFviewer:
                 selectortype, fragments = getTarget(annopage_item)
                 if selectortype == "region":
                     if len(fragments) > 1:
-                        fragment = fragments[-1]
+                        if isinstance(fragments,list):
+                            fragment = fragments[-1]
+                        else:
+                            fragment = fragments
                         if fragment.startswith("pct:"):
                             print("Not implemented")
                             fragment = fragment.strip("pct:")
@@ -651,6 +658,15 @@ class IIIFviewer:
             else:
                 print("Canvas number exceeds the number of Canvas")
 
+        def refresh(change):
+            for i in self.ax._children:
+                if isinstance(i,matplotlib.image.AxesImage):
+                    i.remove()
+            cmap = None
+            extent = (-0.5, self._lcnv_width-0.5, self._lcnv_height-0.5, -0.5)
+            self.image = self.ax.imshow(self.img, cmap=cmap,extent=extent)
+            self.fig.canvas.draw()
+
         def load_zoom(change):
             img = io.imread(self.zoomregion)
             self.ax.imshow(img,extent=self.zoomextent)
@@ -746,7 +762,7 @@ class IIIFviewer:
             accordionlabels.append("seeAlso")
         ## LAYOUT TABS AND ACCORDIONS
         if firstopening:
-            self.W_refreshbtn.on_click(view_image)
+            self.W_refreshbtn.on_click(refresh)
             self.W_loadZoombtn.on_click(load_zoom)
             self._tab_nest = widgets.Tab()
             # accordion = widgets.Accordion(children=[widgets.IntSlider(), widgets.Text()], titles=('Slider', 'Text'))
